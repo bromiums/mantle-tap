@@ -1,5 +1,5 @@
 import { Router, Request, Response } from 'express';
-import { createPublicClient, createWalletClient, http, isAddress, keccak256, parseUnits, toBytes } from 'viem';
+import { createPublicClient, createWalletClient, decodeEventLog, http, isAddress, keccak256, parseUnits, toBytes } from 'viem';
 import { privateKeyToAccount } from 'viem/accounts';
 import { BetScanner } from '../services/BetScanner';
 import { config, TAP_BET_MANAGER_ABI, BYTES32_TO_SYMBOL, SYMBOL_BYTES32 } from '../config';
@@ -112,6 +112,94 @@ export function createBetsRouter(scanner: BetScanner): Router {
         data: {
           transactionHash: txHash,
           relayer: relayerAccount.address,
+        },
+      });
+    } catch (err: any) {
+      res.status(500).json({ success: false, error: err?.shortMessage ?? err?.message ?? 'Internal error' });
+    }
+  });
+
+  // POST /api/one-tap/place-bets-with-session — relayed batch placement (e.g. multi-tap drag)
+  router.post('/place-bets-with-session', async (req: Request, res: Response) => {
+    try {
+      const { trader, bets, sessionSignature } = req.body;
+
+      if (!trader || !isAddress(trader)) {
+        res.status(400).json({ success: false, error: 'valid trader address required' });
+        return;
+      }
+
+      if (!Array.isArray(bets) || bets.length === 0) {
+        res.status(400).json({ success: false, error: 'non-empty bets array required' });
+        return;
+      }
+
+      if (!sessionSignature || typeof sessionSignature !== 'string') {
+        res.status(400).json({ success: false, error: 'sessionSignature required' });
+        return;
+      }
+
+      const betsArgs = bets.map((bet: any) => {
+        const symbolBytes32 = SYMBOL_BYTES32[bet.symbol] ?? keccak256(toBytes(bet.symbol));
+        const collateralAmount = bet.collateral
+          ? BigInt(bet.collateral)
+          : parseUnits(String(bet.collateralUsdc), 6);
+
+        return {
+          symbol: symbolBytes32,
+          targetPrice: BigInt(bet.targetPrice),
+          entryPrice: BigInt(bet.entryPrice),
+          collateral: collateralAmount,
+          expiry: BigInt(bet.expiry),
+          expectedMultiplier: BigInt(bet.expectedMultiplier),
+        };
+      });
+
+      const txHash = await relayerClient.writeContract({
+        address: config.tapBetManager,
+        abi: TAP_BET_MANAGER_ABI,
+        functionName: 'placeBetsWithSessionSignature',
+        args: [
+          trader as `0x${string}`,
+          betsArgs,
+          sessionSignature as `0x${string}`,
+        ],
+        account: relayerAccount,
+      });
+
+      const receipt = await client.waitForTransactionReceipt({ hash: txHash });
+      if (receipt.status === 'reverted') {
+        throw new Error('relayed batch reverted');
+      }
+
+      // The batch is "best-effort": individual entries can be skipped (e.g. stale
+      // expiry, slippage) without reverting the whole tx. Decode the receipt logs
+      // so the caller can report how many actually landed vs. were skipped, instead
+      // of assuming every queued entry succeeded.
+      let placedCount = 0;
+      const skipped: { symbol: string; reason: string }[] = [];
+      for (const log of receipt.logs) {
+        try {
+          const decoded = decodeEventLog({ abi: TAP_BET_MANAGER_ABI, data: log.data, topics: log.topics });
+          if (decoded.eventName === 'BetPlaced') {
+            placedCount += 1;
+          } else if (decoded.eventName === 'BetPlacementSkipped') {
+            const args = decoded.args as { symbol: `0x${string}`; reason: string };
+            skipped.push({ symbol: BYTES32_TO_SYMBOL[args.symbol] ?? args.symbol, reason: args.reason });
+          }
+        } catch {
+          // log from a different contract/event — ignore
+        }
+      }
+
+      res.json({
+        success: true,
+        data: {
+          transactionHash: txHash,
+          relayer: relayerAccount.address,
+          requested: betsArgs.length,
+          placed: placedCount,
+          skipped,
         },
       });
     } catch (err: any) {
