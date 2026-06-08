@@ -31,7 +31,7 @@ const TradingChart: React.FC = () => {
   );
 
   const { isActive, collateralPerTap, multiTapEnabled } = useTapToTrade();
-  const { placeBet, isPending } = usePlaceBet();
+  const { placeBet, placeBetsBatch, isPending } = usePlaceBet();
   const { currentBalance, pnlDollar, pnlPercent } = usePortfolioPnL();
 
   const { marketDataMap, oraclePrices } = useMarketWebSocket(baseMarkets);
@@ -112,6 +112,46 @@ const TradingChart: React.FC = () => {
       if (tx) toast.success('Bet placed!');
     } catch (error: any) {
       toast.error(error?.message || 'Failed to place bet');
+    }
+  };
+
+  // Multi-tap drag: relays every cell queued during one drag gesture as a single
+  // batched transaction (instead of one relayed tx per cell). Purely additive —
+  // the regular single-tap flow above (handleCellClick / placeBet) is untouched.
+  const handleMultiTapBatch = async (
+    entries: { targetPrice: number; targetTime: number; entryPrice: number; entryTime: number }[],
+  ) => {
+    if (!activeMarket || !isActive || entries.length === 0) return;
+    const now = Math.floor(Date.now() / 1000);
+
+    const paramsList = entries.map((entry) => {
+      const expirySeconds = Math.max(1, entry.targetTime - now);
+      const targetPriceBigInt = BigInt(Math.round(entry.targetPrice * 1e8));
+      const entryPriceBigInt = BigInt(Math.round(entry.entryPrice * 1e8));
+      const expectedMultiplier = getMultiplier(entryPriceBigInt, targetPriceBigInt, expirySeconds);
+
+      return {
+        symbolName: activeMarket.symbol,
+        targetPrice: targetPriceBigInt,
+        entryPrice: entryPriceBigInt,
+        collateralUsdc: collateralPerTap,
+        expirySeconds,
+        expectedMultiplier,
+      };
+    });
+
+    try {
+      const result = await placeBetsBatch(paramsList);
+      if (!result) return;
+      if (result.skipped.length === 0) {
+        toast.success(`${result.placed} bets placed in one transaction!`);
+      } else {
+        toast.success(
+          `${result.placed} of ${result.requested} bets placed in one tx — ${result.skipped.length} skipped (${result.skipped[0].reason})`,
+        );
+      }
+    } catch (error: any) {
+      toast.error(error?.message || 'Failed to place batch');
     }
   };
 
@@ -227,6 +267,7 @@ const TradingChart: React.FC = () => {
             showYAxis={true}
             yAxisSide="left"
             onCellClick={handleCellClick}
+            onMultiTapBatch={handleMultiTapBatch}
           />
         )}
       </div>
