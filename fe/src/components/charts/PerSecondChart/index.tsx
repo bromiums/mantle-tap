@@ -26,6 +26,7 @@ const PerSecondChart: React.FC<PerSecondChartProps> = ({
   isBinaryTradingEnabled = false,
   tradeMode = 'one-tap-profit',
   onCellClick,
+  onMultiTapBatch,
   isPlacingBet = false,
   multiTapEnabled = false,
   activeBets = EMPTY_BETS,
@@ -138,6 +139,7 @@ const PerSecondChart: React.FC<PerSecondChartProps> = ({
     multiTapEnabled,
     resolveCellFromPoint: (point) => resolveCellFromPointRef.current?.(point) ?? null,
     onCellClick,
+    onMultiTapBatch,
     onCellPress: (_x, _y) => {
       const bounds = hoveredCell ? cellBoundsMapRef.current.get(hoveredCell) : null;
       if (bounds) {
