@@ -99,7 +99,7 @@ contract IntegrationTest is Test {
         uint256 userUsdcBefore = usdc.balanceOf(user);
 
         vm.prank(user);
-        uint256 betId = manager.placeBet(BTC_SYMBOL, target, COLLATERAL, expiry, mul);
+        uint256 betId = manager.placeBet(BTC_SYMBOL, target, currentPrice, COLLATERAL, expiry, mul);
 
         // Verify collateral pulled from user
         assertEq(usdc.balanceOf(user), userUsdcBefore - COLLATERAL);
@@ -110,7 +110,7 @@ contract IntegrationTest is Test {
 
         // Solver settles
         vm.prank(solver);
-        manager.settleBetWin{value: 1}(betId, data);
+        manager.settleBetWin(betId);
 
         // User received payout (minus solver fee)
         uint256 userUsdcAfter = usdc.balanceOf(user);
@@ -139,7 +139,7 @@ contract IntegrationTest is Test {
         uint256 vaultBefore = usdc.balanceOf(address(vault));
 
         vm.prank(user);
-        uint256 betId = manager.placeBet(BTC_SYMBOL, target, COLLATERAL, expiry, mul);
+        uint256 betId = manager.placeBet(BTC_SYMBOL, target, currentPrice, COLLATERAL, expiry, mul);
 
         // Vault received collateral
         assertEq(usdc.balanceOf(address(vault)), vaultBefore + COLLATERAL);
@@ -175,7 +175,7 @@ contract IntegrationTest is Test {
         uint256 mul = multiplierEngine.getMultiplier(currentPrice, target, 300);
 
         vm.prank(user);
-        uint256 betId = manager.placeBet(BTC_SYMBOL, target, COLLATERAL, expiry, mul);
+        uint256 betId = manager.placeBet(BTC_SYMBOL, target, currentPrice, COLLATERAL, expiry, mul);
 
         // Drain vault again (e.g., another LP deposits then withdraws to reset)
         // Actually after placeBet vault now has COLLATERAL. Drain it by having deployer pull.
@@ -194,7 +194,7 @@ contract IntegrationTest is Test {
         if (!vault.canCoverPayout(totalPayout)) {
             vm.prank(solver);
             vm.expectRevert("TapVault: insufficient liquidity");
-            manager.settleBetWin{value: 1}(betId, data);
+            manager.settleBetWin(betId);
         }
     }
 
@@ -214,10 +214,10 @@ contract IntegrationTest is Test {
         uint256 mul2 = multiplierEngine.getMultiplier(cur, target2, 300);
 
         vm.prank(user);
-        uint256 bet1 = manager.placeBet(BTC_SYMBOL, target1, COLLATERAL, expiry, mul1);
+        uint256 bet1 = manager.placeBet(BTC_SYMBOL, target1, cur, COLLATERAL, expiry, mul1);
 
         vm.prank(user);
-        uint256 bet2 = manager.placeBet(BTC_SYMBOL, target2, COLLATERAL, expiry, mul2);
+        uint256 bet2 = manager.placeBet(BTC_SYMBOL, target2, cur, COLLATERAL, expiry, mul2);
 
         assertEq(manager.getActiveBets().length, 2);
         assertEq(manager.getUserBets(user).length, 2);
@@ -227,7 +227,7 @@ contract IntegrationTest is Test {
         bytes[] memory data1 = _buildUpdate(BTC_PRICE_ID, int64(uint64(target1)), uint64(block.timestamp));
 
         vm.prank(solver);
-        manager.settleBetWin{value: 1}(bet1, data1);
+        manager.settleBetWin(bet1);
 
         assertEq(uint8(manager.getBet(bet1).status), uint8(TapBetManager.BetStatus.WON));
         assertEq(uint8(manager.getBet(bet2).status), uint8(TapBetManager.BetStatus.ACTIVE));
