@@ -3,6 +3,17 @@ import { toast } from 'sonner';
 import { PricePoint } from '../types';
 import { DEFAULT_GRID_X_SECONDS } from '../constants';
 
+export interface MultiTapBetEntry {
+  targetPrice: number;
+  targetTime: number;
+  entryPrice: number;
+  entryTime: number;
+}
+
+// Mirrors MAX_BATCH_SIZE in TapBetManager.sol — flush mid-drag once reached so a
+// long drag becomes a couple of batched relays instead of one oversized transaction.
+const MULTI_TAP_MAX_BATCH = 25;
+
 interface UseChartInteractionProps {
   canvasRef: React.RefObject<HTMLCanvasElement | null>;
   scrollOffset: number;
@@ -22,6 +33,11 @@ interface UseChartInteractionProps {
     entryPrice: number,
     entryTime: number,
   ) => void;
+  // Multi-tap drag only: receives all cells queued during one drag gesture on
+  // mouse-release, so the caller can relay them as a single batched transaction
+  // instead of one transaction per cell. When provided, multi-tap mode queues
+  // instead of calling `onCellClick` per cell; `onCellClick` itself is untouched.
+  onMultiTapBatch?: (entries: MultiTapBetEntry[]) => void;
   onCellPress?: (x: number, y: number) => void;
   priceHistory: PricePoint[];
   currentPrice: number;
@@ -43,6 +59,7 @@ export const useChartInteraction = ({
   multiTapEnabled = false,
   resolveCellFromPoint,
   onCellClick,
+  onMultiTapBatch,
   onCellPress,
   priceHistory,
   currentPrice,
@@ -58,8 +75,16 @@ export const useChartInteraction = ({
   const [selectedCells, setSelectedCells] = useState<Set<string>>(new Set());
   const [mousePos, setMousePos] = useState<{ x: number; y: number } | null>(null);
   const multiTapVisitedRef = useRef<Set<string>>(new Set());
+  const multiTapQueueRef = useRef<MultiTapBetEntry[]>([]);
 
   const GRID_X_SECONDS = gridIntervalSeconds;
+
+  const flushMultiTapQueue = useCallback(() => {
+    if (multiTapQueueRef.current.length === 0) return;
+    const batch = multiTapQueueRef.current;
+    multiTapQueueRef.current = [];
+    onMultiTapBatch?.(batch);
+  }, [onMultiTapBatch]);
 
   const getCanvasPoint = useCallback(
     (e: React.MouseEvent<HTMLCanvasElement>) => {
@@ -87,9 +112,12 @@ export const useChartInteraction = ({
       setDragStartScrollOffset(scrollOffset);
       setDragStartVerticalOffset(verticalOffset);
       multiTapVisitedRef.current = new Set();
+      multiTapQueueRef.current = [];
 
-      // Multi-tap: immediately bet + highlight the cell under the initial click
-      if (multiTapEnabled && isBinaryTradingEnabled && point && resolveCellFromPoint && onCellClick) {
+      // Multi-tap: highlight the cell under the initial click, and either queue it
+      // for batched relay on release (when onMultiTapBatch is wired up) or fall back
+      // to placing it immediately via onCellClick (legacy per-cell behavior).
+      if (multiTapEnabled && isBinaryTradingEnabled && point && resolveCellFromPoint && (onMultiTapBatch || onCellClick)) {
         const cell = resolveCellFromPoint(point);
         if (cell) {
           multiTapVisitedRef.current.add(cell);
@@ -100,11 +128,22 @@ export const useChartInteraction = ({
           const gridBottomPrice = parseFloat(priceLevelStr);
           const targetTime = gridStartTime + GRID_X_SECONDS;
           const targetPrice = gridBottomPrice + gridYDollars / 2;
-          onCellClick(targetPrice, targetTime, 0, gridStartTime);
+          // Use the latest known price as entry price — same source mousemove uses.
+          // A hardcoded 0 here would make the contract reject this entry with
+          // "zero entry price" (it requires entryPrice > 0).
+          const entryPrice =
+            priceHistory.length > 0 ? priceHistory[priceHistory.length - 1].price : currentPrice;
+
+          if (onMultiTapBatch) {
+            multiTapQueueRef.current.push({ targetPrice, targetTime, entryPrice, entryTime: gridStartTime });
+            if (multiTapQueueRef.current.length >= MULTI_TAP_MAX_BATCH) flushMultiTapQueue();
+          } else {
+            onCellClick?.(targetPrice, targetTime, entryPrice, gridStartTime);
+          }
         }
       }
     },
-    [getCanvasPoint, scrollOffset, verticalOffset, multiTapEnabled, isBinaryTradingEnabled, resolveCellFromPoint, onCellClick, GRID_X_SECONDS, gridYDollars],
+    [getCanvasPoint, scrollOffset, verticalOffset, multiTapEnabled, isBinaryTradingEnabled, resolveCellFromPoint, onCellClick, onMultiTapBatch, flushMultiTapQueue, priceHistory, currentPrice, GRID_X_SECONDS, gridYDollars],
   );
 
   const handleMouseMove = useCallback(
@@ -115,8 +154,8 @@ export const useChartInteraction = ({
       if (isDragging) {
         e.preventDefault();
 
-        // Multi-tap mode: trigger bet on each new cell entered during drag
-        if (multiTapEnabled && isBinaryTradingEnabled && point && resolveCellFromPoint && onCellClick) {
+        // Multi-tap mode: queue (or place, legacy fallback) a bet for each new cell entered during drag
+        if (multiTapEnabled && isBinaryTradingEnabled && point && resolveCellFromPoint && (onMultiTapBatch || onCellClick)) {
           const cell = resolveCellFromPoint(point);
           if (cell && !multiTapVisitedRef.current.has(cell)) {
             multiTapVisitedRef.current.add(cell);
@@ -132,7 +171,13 @@ export const useChartInteraction = ({
             const targetPrice = gridBottomPrice + gridYDollars / 2;
             const entryPrice =
               priceHistory.length > 0 ? priceHistory[priceHistory.length - 1].price : currentPrice;
-            onCellClick(targetPrice, targetTime, entryPrice, gridStartTime);
+
+            if (onMultiTapBatch) {
+              multiTapQueueRef.current.push({ targetPrice, targetTime, entryPrice, entryTime: gridStartTime });
+              if (multiTapQueueRef.current.length >= MULTI_TAP_MAX_BATCH) flushMultiTapQueue();
+            } else {
+              onCellClick?.(targetPrice, targetTime, entryPrice, gridStartTime);
+            }
           }
           return; // don't scroll in multi-tap mode
         }
@@ -156,6 +201,8 @@ export const useChartInteraction = ({
       isBinaryTradingEnabled,
       resolveCellFromPoint,
       onCellClick,
+      onMultiTapBatch,
+      flushMultiTapQueue,
       dragStartX,
       dragStartY,
       dragStartScrollOffset,
@@ -224,6 +271,11 @@ export const useChartInteraction = ({
       onCellClick(targetPrice, targetTime, entryPrice, entryTime);
     }
 
+      // Multi-tap drag: relay everything queued during this gesture as one batch
+      if (multiTapEnabled) {
+        flushMultiTapQueue();
+      }
+
       // Enforce "Always Stick": Re-enable focus mode immediately after interaction ends
       // This ensures the user has to "hold" to drag/view elsewhere, but it snaps back on release.
       setIsDragging(false);
@@ -235,6 +287,8 @@ export const useChartInteraction = ({
       hoveredCell,
       isPlacingBet,
       isBinaryTradingEnabled,
+      multiTapEnabled,
+      flushMultiTapQueue,
       priceHistory,
       currentPrice,
       onCellClick,
