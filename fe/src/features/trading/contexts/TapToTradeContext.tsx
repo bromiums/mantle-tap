@@ -85,13 +85,13 @@ export const TapToTradeProvider: React.FC<{ children: ReactNode }> = ({ children
       const account = privateKeyToAccount(privateKey);
       const expiresAt = Date.now() + SESSION_DURATION_MS;
 
-      // 2. Sign to authorize backend to fund session key with MNT
+      // 2. Sign to authorize this browser session key
       toast.loading('Sign to authorize session…', { id: 'session' });
       const message = `Authorize session key ${account.address} for MantleTap until ${expiresAt}`;
       const authSignature = await signMessageAsync({ message });
 
-      // 3. Backend funds session key with MON for gas
-      toast.loading('Funding session key with gas…', { id: 'session' });
+      // 3. Backend verifies the session metadata. The key is not funded with MNT.
+      toast.loading('Preparing gasless session…', { id: 'session' });
       const res = await fetch(`${BACKEND_URL}/api/session/create`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
