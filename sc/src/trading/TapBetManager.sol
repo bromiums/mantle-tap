@@ -54,6 +54,16 @@ contract TapBetManager is Ownable, ReentrancyGuard, Pausable {
         uint256   placedAt;
     }
 
+    /// @notice Single bet's parameters for batch placement via `placeBetsWithSessionSignature`.
+    struct BetParams {
+        bytes32 symbol;
+        uint256 targetPrice;
+        uint256 entryPrice;
+        uint256 collateral;
+        uint256 expiry;
+        uint256 expectedMultiplier;
+    }
+
     // ─── Storage ───────────────────────────────────────────────────────────────
 
     mapping(uint256 => Bet)              public bets;
@@ -72,6 +82,8 @@ contract TapBetManager is Ownable, ReentrancyGuard, Pausable {
 
     uint256 public SETTLER_FEE_BPS = 50;
     uint256 public constant MAX_MULTIPLIER_SLIPPAGE_BPS = 100;
+    /// @notice Upper bound on entries per `placeBetsWithSessionSignature` call, to bound gas usage.
+    uint256 public constant MAX_BATCH_SIZE = 25;
     address public settler;
 
     // ─── Events ────────────────────────────────────────────────────────────────
@@ -94,6 +106,15 @@ contract TapBetManager is Ownable, ReentrancyGuard, Pausable {
         uint256 settlerFee
     );
     event BetExpired(uint256 indexed betId, address indexed user);
+    /// @notice Emitted instead of reverting when an entry in a batch placement fails validation —
+    ///         lets the rest of the batch proceed (see `placeBetsWithSessionSignature`).
+    event BetPlacementSkipped(
+        address indexed trader,
+        bytes32 indexed symbol,
+        uint256 targetPrice,
+        uint256 expiry,
+        string reason
+    );
     event SettlerFeeUpdated(uint256 newFeeBps);
     event SessionKeyAuthorized(address indexed trader, address indexed sessionKey);
     event SessionKeyRevoked(address indexed trader, address indexed sessionKey);
@@ -233,6 +254,95 @@ contract TapBetManager is Ownable, ReentrancyGuard, Pausable {
         betId = _placeBetFor(trader, symbol, targetPrice, entryPrice, collateral, expiry, expectedMultiplier);
 
         emit SessionBetRelayed(trader, sessionKey, msg.sender, nonce);
+    }
+
+    /**
+     * @notice Place multiple bets in one relayed transaction using a single authorized
+     *         session key signature (e.g. for a multi-tap drag gesture).
+     * @dev Unlike `placeBetWithSessionSignature`, this is intentionally non-atomic per entry:
+     *      an entry that fails its content checks (stale expiry, bad multiplier, etc.) is
+     *      skipped — emitting `BetPlacementSkipped` — instead of reverting the whole batch,
+     *      so one stale cell can't void the rest of the gesture. Only batch-level failures
+     *      (bad signature, unauthorized key, empty/oversized batch) revert.
+     *      Signature is over trader, keccak256 of the encoded bet list, current trader nonce,
+     *      this contract, and chain id — one signature, one nonce increment for the whole batch.
+     */
+    function placeBetsWithSessionSignature(
+        address trader,
+        BetParams[] calldata betsList,
+        bytes calldata signature
+    ) external nonReentrant whenNotPaused {
+        require(trader != address(0), "TBM: zero trader");
+        require(betsList.length > 0, "TBM: empty batch");
+        require(betsList.length <= MAX_BATCH_SIZE, "TBM: batch too large");
+
+        uint256 nonce = sessionNonces[trader];
+        bytes32 messageHash = keccak256(
+            abi.encodePacked(
+                trader,
+                keccak256(abi.encode(betsList)),
+                nonce,
+                address(this),
+                block.chainid
+            )
+        );
+
+        address sessionKey = ECDSA.recover(messageHash.toEthSignedMessageHash(), signature);
+        require(authorizedSessionKeys[trader][sessionKey], "TBM: invalid session signature");
+
+        sessionNonces[trader] = nonce + 1;
+
+        for (uint256 i = 0; i < betsList.length; i++) {
+            BetParams calldata p = betsList[i];
+            (bool ok, string memory reason) = _tryPlaceBetFor(
+                trader, p.symbol, p.targetPrice, p.entryPrice, p.collateral, p.expiry, p.expectedMultiplier
+            );
+            if (!ok) {
+                emit BetPlacementSkipped(trader, p.symbol, p.targetPrice, p.expiry, reason);
+            }
+        }
+
+        emit SessionBetRelayed(trader, sessionKey, msg.sender, nonce);
+    }
+
+    /**
+     * @dev Non-reverting counterpart of `_placeBetFor` for use in best-effort batches:
+     *      mirrors its validations exactly, but returns `(false, reason)` instead of
+     *      reverting on a per-entry content failure. `_placeBetFor` itself is left untouched
+     *      so the existing single-bet paths keep their current (audited, working) behaviour.
+     */
+    function _tryPlaceBetFor(
+        address trader,
+        bytes32 symbol,
+        uint256 targetPrice,
+        uint256 entryPrice,
+        uint256 collateral,
+        uint256 expiry,
+        uint256 expectedMultiplier
+    ) internal returns (bool ok, string memory reason) {
+        if (targetPrice == 0)                       return (false, "zero target price");
+        if (entryPrice == 0)                        return (false, "zero entry price");
+        if (collateral == 0)                        return (false, "zero collateral");
+        if (expiry <= block.timestamp)               return (false, "expiry in past");
+        if (expiry > block.timestamp + 3600)         return (false, "expiry too far");
+
+        uint256 actualMultiplier = multiplierEngine.getMultiplier(entryPrice, targetPrice, expiry - block.timestamp);
+        uint256 absDiff = actualMultiplier > expectedMultiplier
+            ? actualMultiplier - expectedMultiplier
+            : expectedMultiplier - actualMultiplier;
+        if (absDiff * 10000 > expectedMultiplier * MAX_MULTIPLIER_SLIPPAGE_BPS) {
+            return (false, "multiplier slippage exceeded");
+        }
+
+        uint256 betId = _storeBet(trader, symbol, targetPrice, collateral, expiry, actualMultiplier, entryPrice);
+
+        usdc.safeTransferFrom(trader, address(vault), collateral);
+        vault.collectCollateral(collateral);
+
+        Direction direction = targetPrice >= entryPrice ? Direction.UP : Direction.DOWN;
+        emit BetPlaced(betId, trader, symbol, targetPrice, collateral, actualMultiplier, direction, expiry);
+
+        return (true, "");
     }
 
     function _placeBetFor(
