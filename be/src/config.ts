@@ -40,6 +40,17 @@ export const TAP_BET_MANAGER_ABI = [
   { type: 'function', name: 'settleBetWin', inputs: [{ name: 'betId', type: 'uint256' }], outputs: [], stateMutability: 'nonpayable' },
   { type: 'function', name: 'batchSettleExpired', inputs: [{ name: 'betIds', type: 'uint256[]' }], outputs: [], stateMutability: 'nonpayable' },
   { type: 'function', name: 'settleExpired', inputs: [{ name: 'betId', type: 'uint256' }], outputs: [], stateMutability: 'nonpayable' },
+  { type: 'function', name: 'sessionNonces', inputs: [{ name: '', type: 'address' }], outputs: [{ name: '', type: 'uint256' }], stateMutability: 'view' },
+  { type: 'function', name: 'placeBetWithSessionSignature', inputs: [
+    { name: 'trader', type: 'address' },
+    { name: 'symbol', type: 'bytes32' },
+    { name: 'targetPrice', type: 'uint256' },
+    { name: 'entryPrice', type: 'uint256' },
+    { name: 'collateral', type: 'uint256' },
+    { name: 'expiry', type: 'uint256' },
+    { name: 'expectedMultiplier', type: 'uint256' },
+    { name: 'signature', type: 'bytes' },
+  ], outputs: [{ name: 'betId', type: 'uint256' }], stateMutability: 'nonpayable' },
   { type: 'event', name: 'BetPlaced', inputs: [
     { name: 'betId', type: 'uint256', indexed: true },
     { name: 'user', type: 'address', indexed: true },
