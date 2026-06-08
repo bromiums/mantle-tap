@@ -178,9 +178,14 @@ export default function SessionControls() {
   const { orders: myOrders, isLoading } = useBinaryOrders();
   const [, tick] = useState(0);
 
-  // Whale state
-  const [whales, setWhales] = useState<WhaleBet[]>(() => seedWhales(5));
+  // Whale state — start empty and seed on the client only, since seedWhales
+  // uses Math.random() and would otherwise mismatch between SSR and hydration.
+  const [whales, setWhales] = useState<WhaleBet[]>([]);
   const newWhaleIdsRef = useRef<Set<string>>(new Set());
+
+  useEffect(() => {
+    setWhales(seedWhales(5));
+  }, []);
 
   // Countdown tick
   useEffect(() => {

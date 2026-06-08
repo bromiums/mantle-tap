@@ -67,8 +67,10 @@ export const usePriceHistory = (symbol: string, currentPrice: number) => {
         }
       };
 
-      ws.onerror = (error) => {
-        console.error('Pyth WebSocket error:', error);
+      ws.onerror = () => {
+        // WebSocket error events carry no useful detail (just `{}`); avoid
+        // triggering the error overlay for what's usually a transient network blip.
+        console.warn('⚠️ Pyth WebSocket error (price feed may be unavailable)');
       };
 
       ws.onclose = () => {};

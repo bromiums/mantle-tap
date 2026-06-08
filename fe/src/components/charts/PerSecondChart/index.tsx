@@ -13,6 +13,12 @@ import { usePriceHistory } from './hooks/usePriceHistory';
 import { useChartFocus } from './hooks/useChartFocus';
 import { useChartInteraction } from './hooks/useChartInteraction';
 
+// Stable empty-array references so default props don't create a new array
+// identity on every render (which would re-trigger effects keyed on them
+// and cause infinite render loops).
+const EMPTY_BETS: Bet[] = [];
+const EMPTY_MARKERS: PerSecondChartProps['positionMarkers'] = [];
+
 const PerSecondChart: React.FC<PerSecondChartProps> = ({
   symbol,
   currentPrice,
@@ -22,7 +28,7 @@ const PerSecondChart: React.FC<PerSecondChartProps> = ({
   onCellClick,
   isPlacingBet = false,
   multiTapEnabled = false,
-  activeBets = [],
+  activeBets = EMPTY_BETS,
   logoUrl,
   gridIntervalSeconds = DEFAULT_GRID_X_SECONDS,
   gridPriceStep,
@@ -31,8 +37,8 @@ const PerSecondChart: React.FC<PerSecondChartProps> = ({
   yAxisSide = 'right',
   showXAxis = true,
   showYAxis = true,
-  positionMarkers = [],
-  pendingMarkers = [],
+  positionMarkers = EMPTY_MARKERS,
+  pendingMarkers = EMPTY_MARKERS,
 }) => {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const resolveCellFromPointRef = useRef<((point: { x: number; y: number }) => string | null) | null>(

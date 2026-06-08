@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useCallback } from 'react';
+import { useState, useCallback, useMemo } from 'react';
 import PriceTicker from '@/components/layout/PriceTicker';
 import { useMarket } from '@/features/trading/contexts/MarketContext';
 import { useDynamicTitle } from '@/hooks/utils/useDynamicTitle';
@@ -29,7 +29,7 @@ export default function TradePageContent() {
     [address],
   );
 
-  const baseMarkets = activeMarket ? [activeMarket] : [];
+  const baseMarkets = useMemo(() => (activeMarket ? [activeMarket] : []), [activeMarket]);
   useMarketWebSocket(baseMarkets, handleBetWon);
 
   return (
