@@ -1,385 +1,743 @@
 'use client';
 
-import { useEffect, useRef } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import Link from 'next/link';
+import Image from 'next/image';
 import { sdk } from '@farcaster/miniapp-sdk';
+import Squares from '@/components/Squares';
+import StaggeredMenu from '@/components/StaggeredMenu';
+import dynamic from 'next/dynamic';
+import Lenis from 'lenis';
 
-const markets = ['BTC', 'ETH', 'SOL', 'BNB', 'ARB', 'XAU', 'XAG', 'AAPL', 'GOOGL', 'SPY'];
-
-const features = [
-  {
-    title: 'Pyth Oracle',
-    description: 'Real-time high-fidelity price feeds from Pyth Network.',
-  },
-  {
-    title: 'Built on Mantle',
-    description: 'Low-cost EVM-compatible L2 with fast finality and native MNT gas token.',
-  },
-  {
-    title: 'Prediction Rewards',
-    description: 'Win USDC rewards for accurate price predictions every round.',
-  },
-];
-
-const stats = [
-  { value: 'L2', label: 'Mantle Network' },
-  { value: 'Fast', label: 'Block Time' },
-  { value: '0', label: 'Gas Fees' },
-  { value: '∞', label: 'Parallel Positions' },
-];
+const Silk = dynamic(() => import('@/components/Silk'), { ssr: false });
 
 export default function LandingPage() {
-  const heroRef = useRef<HTMLDivElement>(null);
+
+  // Platform preview scroll stack
+  const platformRef = useRef<HTMLDivElement>(null);
+  const [platformProgress, setPlatformProgress] = useState(0);
+  const [platformPosition, setPlatformPosition] = useState<'before' | 'fixed' | 'after'>('before');
+
+  // Hero phone parallax
+  const [heroScroll, setHeroScroll] = useState(0);
+
+  // Supported Coins section animation
+  const coinsRef = useRef<HTMLDivElement>(null);
+  const [coinsVisible, setCoinsVisible] = useState(false);
+
+  // Text scramble effect for scroll stack text
+  const platformTexts = [
+    { title: 'Tap to Trade Interface', subtitle: 'A clean, real-time trading interface built for speed — no order books, no complexity' },
+    { title: 'Choose Your Market', subtitle: 'Pick BTC, ETH, or SOL and start trading in seconds' },
+    { title: 'Place Your Position', subtitle: 'Tap a price target on the chart — if the price hits it, you win' },
+  ];
+  const scramblePhaseRef = useRef(-1);
+  const [displayTitle, setDisplayTitle] = useState('');
+  const scrambleRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
   useEffect(() => {
     sdk.actions.ready();
   }, []);
 
+  // Smooth scroll with Lenis
   useEffect(() => {
-    const handleScroll = () => {
-      if (!heroRef.current) return;
-      const scrollY = window.scrollY;
-      heroRef.current.style.transform = `translateY(${scrollY * 0.3}px)`;
-      heroRef.current.style.opacity = `${1 - scrollY / 600}`;
+    const lenis = new Lenis({
+      duration: 1.2,
+      easing: (t) => Math.min(1, 1.001 - Math.pow(2, -10 * t)),
+      smoothWheel: true,
+    });
+
+    function raf(time: number) {
+      lenis.raf(time);
+      requestAnimationFrame(raf);
+    }
+    requestAnimationFrame(raf);
+
+    return () => {
+      lenis.destroy();
     };
-    window.addEventListener('scroll', handleScroll, { passive: true });
-    return () => window.removeEventListener('scroll', handleScroll);
   }, []);
 
-  return (
-    <div className="min-h-screen bg-black text-white overflow-x-hidden">
-      {/* Ambient bg blobs */}
-      <div className="fixed inset-0 pointer-events-none overflow-hidden z-0">
-        <div className="absolute -top-40 -left-40 w-[600px] h-[600px] rounded-full bg-purple-600/10 blur-[120px]" />
-        <div className="absolute top-1/3 -right-40 w-[500px] h-[500px] rounded-full bg-violet-500/10 blur-[100px]" />
-        <div className="absolute bottom-0 left-1/3 w-[400px] h-[400px] rounded-full bg-indigo-600/8 blur-[100px]" />
-      </div>
+  // Text scramble - run on every platformProgress change, but only act on phase change
+  const scrambleChars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789!@#$%&*';
+  const startScramble = (phase: number) => {
+    if (scrambleRef.current) clearInterval(scrambleRef.current);
 
-      {/* Navbar */}
-      <nav className="relative z-50 border-b border-white/5 bg-black/60 backdrop-blur-xl px-6 py-4 sticky top-0">
-        <div className="max-w-6xl mx-auto flex items-center justify-between">
-          <div className="flex items-center gap-2">
-            <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-purple-500 to-violet-600 flex items-center justify-center text-sm font-black shadow-lg shadow-purple-500/30">
-              M
-            </div>
-            <span className="font-black text-xl tracking-tight">
-              Mantle<span className="text-purple-400">Tap</span>
+    const targetTitle = platformTexts[phase].title;
+    let tick = 0;
+    const totalTicks = 15;
+
+    scrambleRef.current = setInterval(() => {
+      tick++;
+      const progress = tick / totalTicks;
+
+      const resolvedTitle = Math.floor(progress * targetTitle.length);
+      setDisplayTitle(
+        targetTitle.split('').map((ch, i) => {
+          if (i < resolvedTitle) return ch;
+          if (ch === ' ') return ' ';
+          return scrambleChars[Math.floor(Math.random() * scrambleChars.length)];
+        }).join('')
+      );
+
+      if (tick >= totalTicks) {
+        setDisplayTitle(targetTitle);
+        if (scrambleRef.current) clearInterval(scrambleRef.current);
+        scrambleRef.current = null;
+      }
+    }, 30);
+  };
+
+  // Check phase on every progress change (no cleanup that kills the interval)
+  const currentPhase = platformProgress < 0.3 ? 0 : platformProgress < 0.65 ? 1 : 2;
+  if (currentPhase !== scramblePhaseRef.current) {
+    scramblePhaseRef.current = currentPhase;
+    startScramble(currentPhase);
+  }
+
+  // Platform preview scroll progress (JS-based fixed positioning)
+  useEffect(() => {
+    const handlePlatformScroll = () => {
+      if (!platformRef.current) return;
+      const rect = platformRef.current.getBoundingClientRect();
+      const scrollSpace = platformRef.current.offsetHeight - window.innerHeight;
+      if (scrollSpace <= 0) return;
+
+      if (rect.top > 0) {
+        // Haven't reached section yet
+        setPlatformPosition('before');
+        setPlatformProgress(0);
+      } else if (rect.bottom <= window.innerHeight) {
+        // Scrolled past section
+        setPlatformPosition('after');
+        setPlatformProgress(1);
+      } else {
+        // Inside the section - fix content
+        setPlatformPosition('fixed');
+        const progress = Math.max(0, Math.min(1, -rect.top / scrollSpace));
+        setPlatformProgress(progress);
+      }
+    };
+
+    window.addEventListener('scroll', handlePlatformScroll, { passive: true });
+    handlePlatformScroll();
+    return () => window.removeEventListener('scroll', handlePlatformScroll);
+  }, []);
+
+
+  // Hero phone parallax
+  useEffect(() => {
+    const handleHeroScroll = () => {
+      setHeroScroll(window.scrollY);
+    };
+    window.addEventListener('scroll', handleHeroScroll, { passive: true });
+    return () => window.removeEventListener('scroll', handleHeroScroll);
+  }, []);
+
+  // Supported Coins intersection observer
+  useEffect(() => {
+    const el = coinsRef.current;
+    if (!el) return;
+    const observer = new IntersectionObserver(
+      ([entry]) => setCoinsVisible(entry.isIntersecting),
+      { threshold: 0.3 }
+    );
+    observer.observe(el);
+    return () => observer.disconnect();
+  }, []);
+
+
+  return (
+    <div className="w-full bg-black text-white overflow-x-hidden" style={{ fontFamily: "'Satoshi', sans-serif" }}>
+      {/* Header Menu */}
+      <StaggeredMenu
+        isFixed={true}
+        position="right"
+        colors={["#161616", "#1a1a1a"]}
+        accentColor="#00d395"
+        menuButtonColor="#fff"
+        openMenuButtonColor="#fff"
+        displayItemNumbering={true}
+        displaySocials={true}
+        closeOnClickAway={true}
+        items={[
+          { label: "Launch App", ariaLabel: "Launch trading app", link: "/trade" },
+          { label: "Docs", ariaLabel: "Documentation", link: "#" },
+        ]}
+        socialItems={[
+          { label: "GitHub", link: "https://github.com/imferdinandd/mantle-tap" },
+        ]}
+      />
+
+      {/* Hero Section with Layered Text */}
+      <section className="relative min-h-screen flex items-center justify-center overflow-hidden bg-black">
+        <div className="absolute inset-0">
+          <Silk
+            color="#00d395"
+            speed={5}
+            scale={1}
+            noiseIntensity={1.5}
+            rotation={0}
+          />
+        </div>
+        <div className="absolute inset-0">
+          <Squares
+            direction="left"
+            speed={0.3}
+            squareSize={55}
+            borderColor="#333"
+            hoverFillColor="#1a1a1a"
+            clickImage="/mantle-tap-polos.png"
+          />
+        </div>
+        <div className="absolute bottom-0 left-0 right-0 h-40 bg-gradient-to-b from-transparent to-black z-10 pointer-events-none"></div>
+        <div className="absolute left-1/2 -translate-x-1/2 z-20 flex flex-col items-center pointer-events-none w-[95%] md:w-auto" style={{ bottom: '70%' }}>
+          <h2 className="text-4xl md:text-6xl font-bold text-white text-center mb-4">
+            <span className="flex md:hidden items-center justify-center gap-2 flex-wrap">
+              Welcome to
+              <Image
+                src="/mantle-tap-polos.png"
+                alt="MantleTap Logo"
+                width={56}
+                height={56}
+                className="w-10 h-10 inline-block"
+              />
+              MantleTap
             </span>
-          </div>
-          <div className="hidden md:flex items-center gap-8 text-sm text-gray-400">
-            <a href="#features" className="hover:text-white transition-colors">
-              Features
-            </a>
-            <a href="#how-it-works" className="hover:text-white transition-colors">
-              How It Works
-            </a>
-          </div>
+            <span className="hidden md:flex items-center justify-center gap-3">
+              Welcome to
+              <Image
+                src="/mantle-tap-polos.png"
+                alt="MantleTap Logo"
+                width={56}
+                height={56}
+                className="w-14 h-14 inline-block"
+              />
+              MantleTap
+            </span>
+          </h2>
+          <p className="text-white text-base text-center max-w-none md:max-w-lg px-2 md:px-0">
+            The simplest decentralized exchange — tap to trade, open positions, and earn rewards in just one click.
+          </p>
           <Link
             href="/trade"
-            className="relative group bg-gradient-to-r from-purple-600 to-violet-600 hover:from-purple-500 hover:to-violet-500 text-white text-sm font-bold px-5 py-2.5 rounded-xl transition-all duration-200 shadow-lg shadow-purple-500/25 hover:shadow-purple-500/40 hover:scale-105"
+            className="pointer-events-auto mt-4 font-semibold py-2 px-6 rounded-none
+                       bg-white text-black hover:bg-[#00d395] hover:text-black
+                       transition-all duration-300 ease-in-out
+                       hover:shadow-lg hover:shadow-[#00d395]/30"
           >
-            Launch App →
+            Launch App
           </Link>
         </div>
-      </nav>
+        <div className="absolute bottom-0 left-1/2 z-20 hidden md:block" style={{ transform: `translateX(-50%) translateY(${heroScroll * 0.5}px)` }}>
+          <Image
+            src="/homepage/mockhp.png"
+            alt="MantleTap Mobile App"
+            width={500}
+            height={1000}
+            className="w-auto h-[60vh] object-contain"
+          />
+        </div>
+        <div className="absolute bottom-0 left-0 right-0 z-20 md:hidden" style={{ transform: `translateY(${heroScroll * 0.3}px)` }}>
+          <Image
+            src="/homepage/mockhp.png"
+            alt="MantleTap Mobile App"
+            width={1000}
+            height={600}
+            className="w-full object-cover object-top"
+          />
+        </div>
+      </section>
 
-      {/* Hero */}
-      <section className="relative z-10 min-h-screen flex flex-col items-center justify-center text-center px-6 pt-10 pb-24">
-        <div ref={heroRef}>
-          {/* Badge */}
-          <div className="inline-flex items-center gap-2 bg-purple-500/10 border border-purple-500/20 rounded-full px-4 py-1.5 text-xs font-semibold text-purple-300 mb-8 backdrop-blur-sm">
-            <span className="w-1.5 h-1.5 rounded-full bg-purple-400 animate-pulse" />
-            Prediction Market · Powered by Mantle
+      {/* Platform Preview Section - Scroll Stack */}
+      <section id="features" ref={platformRef} className="relative z-20 bg-black" style={{ height: '300vh' }}>
+        <div
+          className="w-full min-h-screen flex flex-col justify-center px-4 py-20"
+          style={
+            platformPosition === 'fixed'
+              ? { position: 'fixed', top: 0, left: 0, right: 0, zIndex: 20 }
+              : platformPosition === 'after'
+                ? { position: 'absolute', bottom: 0, left: 0, right: 0 }
+                : { position: 'relative' }
+          }
+        >
+          <div className="container mx-auto max-w-7xl">
+            {/* Text - scramble title + fade subtitle */}
+            <div className="text-center mb-12">
+              <h2 className="text-4xl md:text-5xl font-bold bg-gradient-to-r from-[#00d395] to-emerald-300 bg-clip-text text-transparent mb-4 font-mono">
+                {displayTitle}
+              </h2>
+              <div className="relative h-8">
+                {platformTexts.map((text, i) => (
+                  <p
+                    key={i}
+                    className="text-xl text-gray-400 absolute inset-0 transition-opacity duration-500"
+                    style={{ opacity: currentPhase === i ? 1 : 0 }}
+                  >
+                    {text.subtitle}
+                  </p>
+                ))}
+              </div>
+            </div>
+
+            {/* Images stack */}
+            <div className="relative">
+              {/* Base image - taptotrade */}
+              <div
+                className="relative rounded-xl overflow-hidden border border-[#00d395]/30 shadow-2xl shadow-[#00d395]/20"
+                style={{
+                  filter: platformProgress >= 0.3 && platformProgress < 0.65 ? 'blur(3px) brightness(0.7)' : 'blur(0px) brightness(1)',
+                  transition: 'filter 0.6s ease-out',
+                }}
+              >
+                <Image
+                  src="/taptotrade.png"
+                  alt="Tap to Trade"
+                  width={1920}
+                  height={1080}
+                  className="w-full h-auto"
+                  priority
+                />
+              </div>
+
+              {/* Overlay image 2 - menucoin, slides in from top-left */}
+              <div
+                className="absolute top-[7%] left-[11%] w-[45%]"
+                style={{
+                  opacity: platformProgress >= 0.3 && platformProgress < 0.65 ? 1 : 0,
+                  transform: platformProgress >= 0.3 && platformProgress < 0.65
+                    ? 'translate(0, 0) scale(1)'
+                    : platformProgress < 0.3
+                      ? 'translate(-60px, 40px) scale(0.3)'
+                      : 'translate(-60px, 40px) scale(0.3)',
+                  transition: 'opacity 0.6s cubic-bezier(0.34, 1.56, 0.64, 1), transform 0.6s cubic-bezier(0.34, 1.56, 0.64, 1)',
+                }}
+              >
+                <div className="rounded-xl overflow-hidden shadow-2xl shadow-[#00d395]/30">
+                  <Image
+                    src="/menucoin.png"
+                    alt="Choose Your Market"
+                    width={800}
+                    height={600}
+                    className="w-full h-auto"
+                  />
+                </div>
+              </div>
+
+              {/* Base image swap - place-position, fades in as the full background for the final phase */}
+              <div
+                className="absolute inset-0 rounded-xl overflow-hidden border border-[#00d395]/30 shadow-2xl shadow-[#00d395]/20"
+                style={{
+                  opacity: platformProgress >= 0.65 ? 1 : 0,
+                  transition: 'opacity 0.6s ease-out',
+                }}
+              >
+                <Image
+                  src="/homepage/place-position.png"
+                  alt="Place Your Position"
+                  width={1920}
+                  height={1080}
+                  className="w-full h-auto"
+                />
+              </div>
+            </div>
           </div>
+        </div>
+      </section>
 
-          <h1 className="text-6xl md:text-8xl font-black mb-6 leading-none tracking-tight">
-            <span className="block text-white">Predict.</span>
-            <span className="block bg-gradient-to-r from-purple-400 via-violet-400 to-indigo-400 bg-clip-text text-transparent">
-              Tap. Win.
+      {/* Supported Markets Section - Marquee */}
+      <section
+        id="supported-coins"
+        ref={coinsRef}
+        className="relative py-20 bg-black overflow-hidden"
+      >
+        {/* Section Title */}
+        <div className="text-center mb-12">
+          <h2 className="text-4xl md:text-5xl text-white inline-flex items-center justify-center gap-3 w-full">
+            Supported
+            <span className="relative inline-block px-4 py-1">
+              <span
+                className="absolute inset-0 bg-[#00d395] transition-transform duration-700 ease-out"
+                style={{
+                  transform: coinsVisible ? 'scaleX(1)' : 'scaleX(0)',
+                  transformOrigin: 'left center',
+                }}
+              />
+              <span className="relative">Markets</span>
             </span>
-          </h1>
-
-          <p className="text-gray-400 text-lg md:text-xl max-w-2xl mx-auto mb-12 leading-relaxed">
-            Mantle Tap is a on-chain prediction market where you guess the next price direction. One tap
-            to enter, instant settlement, real rewards.
-          </p>
-
-          <div className="flex flex-col sm:flex-row gap-4 justify-center">
-            <Link
-              href="/trade"
-              id="hero-launch-btn"
-              className="bg-gradient-to-r from-purple-600 to-violet-600 hover:from-purple-500 hover:to-violet-500 text-white font-bold px-10 py-4 rounded-2xl text-lg transition-all duration-200 shadow-xl shadow-purple-500/30 hover:shadow-purple-500/50 hover:scale-105"
-            >
-              Start Predicting
-            </Link>
-            <a
-              href="#how-it-works"
-              className="border border-white/10 hover:border-purple-500/40 bg-white/5 hover:bg-purple-500/10 text-white font-semibold px-10 py-4 rounded-2xl text-lg transition-all duration-200"
-            >
-              How It Works
-            </a>
-          </div>
-        </div>
-      </section>
-
-      {/* Problem & Solution */}
-      <section className="relative z-10 max-w-6xl mx-auto px-6 py-24">
-        <div className="text-center mb-14">
-          <p className="text-purple-400 text-sm font-semibold uppercase tracking-widest mb-3">
-            Why Mantle Tap Exists
-          </p>
-          <h2 className="text-4xl md:text-5xl font-black">The Problem. The Fix.</h2>
+          </h2>
         </div>
 
-        <div className="grid md:grid-cols-2 gap-6">
-          {/* Problem */}
-          <div className="relative bg-red-950/20 border border-red-500/20 rounded-3xl p-8 overflow-hidden">
-            <div className="absolute top-0 right-0 w-48 h-48 bg-red-600/5 rounded-full blur-3xl -translate-y-1/2 translate-x-1/2" />
-            <div className="relative z-10">
-              <div className="flex items-center gap-3 mb-6">
-                <div className="w-9 h-9 rounded-xl bg-red-500/20 border border-red-500/30 flex items-center justify-center text-lg">
-                  ⚠️
-                </div>
-                <span className="text-red-400 text-sm font-bold uppercase tracking-widest">
-                  Problem
-                </span>
-              </div>
-              <p className="text-gray-300 text-lg leading-relaxed">
-                Traditional prediction markets are hindered by{' '}
-                <span className="text-red-400 font-semibold">steep learning curves</span>, and{' '}
-                <span className="text-red-400 font-semibold">slow execution speeds</span> that
-                alienate retail participants from real-time price action.
-              </p>
-              <div className="mt-8 space-y-3">
-                {[
-                  'Complex UX & steep learning curve',
-                  'High gas costs per transaction',
-                  'Slow block times miss price action',
-                ].map((item) => (
-                  <div key={item} className="flex items-center gap-3 text-sm text-gray-500">
-                    <span className="w-5 h-5 rounded-full bg-red-500/10 border border-red-500/20 flex items-center justify-center text-red-500 text-xs flex-shrink-0">
-                      ✕
-                    </span>
-                    {item}
-                  </div>
-                ))}
-              </div>
-            </div>
-          </div>
-
-          {/* Solution */}
-          <div className="relative bg-gradient-to-br from-purple-900/20 to-emerald-900/10 border border-purple-500/20 rounded-3xl p-8 overflow-hidden">
-            <div className="absolute top-0 right-0 w-48 h-48 bg-purple-600/8 rounded-full blur-3xl -translate-y-1/2 translate-x-1/2" />
-            <div className="relative z-10">
-              <div className="flex items-center gap-3 mb-6">
-                <div className="w-9 h-9 rounded-xl bg-purple-500/20 border border-purple-500/30 flex items-center justify-center text-lg">
-                  ✨
-                </div>
-                <span className="text-purple-400 text-sm font-bold uppercase tracking-widest">
-                  Solution
-                </span>
-              </div>
-              <p className="text-gray-300 text-lg leading-relaxed">
-                Mantle Tap leverages{' '}
-                <span className="text-purple-400 font-semibold">
-                  Mantle&apos;s low-cost L2 execution
-                </span>{' '}
-                and{' '}
-                <span className="text-purple-400 font-semibold">
-                  Pyth&apos;s high-fidelity feeds
-                </span>{' '}
-                to deliver a frictionless experience — atomically enter multiple predictions across
-                various assets in a single block with instant settlement.
-              </p>
-              <div className="mt-8 space-y-3">
-                {[
-                  'One tap to predict, zero complexity',
-                  'Parallel txs in a single block on Mantle',
-                ].map((item) => (
-                  <div key={item} className="flex items-center gap-3 text-sm text-gray-300">
-                    <span className="w-5 h-5 rounded-full bg-purple-500/20 border border-purple-500/30 flex items-center justify-center text-purple-400 text-xs flex-shrink-0">
-                      ✓
-                    </span>
-                    {item}
-                  </div>
-                ))}
-              </div>
-            </div>
-          </div>
-        </div>
-      </section>
-
-      {/* How It Works */}
-      <section id="how-it-works" className="relative z-10 max-w-6xl mx-auto px-6 py-24">
-        <div className="text-center mb-16">
-          <p className="text-purple-400 text-sm font-semibold uppercase tracking-widest mb-3">
-            Core Features
-          </p>
-          <h2 className="text-4xl md:text-5xl font-black">Two Ways to Play</h2>
-          <p className="text-gray-400 mt-4 max-w-xl mx-auto">
-            Mantle Tap offers two unique prediction modes — simple or parallel, the choice is yours.
-          </p>
-        </div>
-
-        <div className="grid md:grid-cols-2 gap-6">
-          {/* Single Tap */}
-          <div className="group relative bg-gradient-to-br from-purple-900/20 to-violet-900/10 border border-purple-500/20 rounded-3xl p-8 hover:border-purple-500/40 transition-all duration-300 hover:shadow-xl hover:shadow-purple-500/10 overflow-hidden">
-            <div className="absolute inset-0 bg-gradient-to-br from-purple-600/5 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-300" />
-            <div className="relative z-10">
-              <div className="text-xs font-bold text-purple-400 uppercase tracking-widest mb-2">
-                Mode 1
-              </div>
-              <h3 className="text-2xl font-black mb-3">Single Tap</h3>
-              <p className="text-gray-400 leading-relaxed mb-6">
-                The simplest prediction experience. Choose one market, pick UP or DOWN, and wait for
-                settlement. Perfect for beginners and quick rounds.
-              </p>
-              <ul className="space-y-2">
-                {['Pick one asset', 'Tap UP or DOWN', 'Win if you predict right'].map((step) => (
-                  <li key={step} className="flex items-center gap-2 text-sm text-gray-300">
-                    <span className="w-5 h-5 rounded-full bg-purple-500/20 border border-purple-500/30 flex items-center justify-center text-purple-400 text-xs">
-                      ✓
-                    </span>
-                    {step}
-                  </li>
-                ))}
-              </ul>
-            </div>
-          </div>
-
-          {/* Parallel Multi Tap */}
-          <div className="group relative bg-gradient-to-br from-indigo-900/20 to-violet-900/10 border border-indigo-500/20 rounded-3xl p-8 hover:border-indigo-500/40 transition-all duration-300 hover:shadow-xl hover:shadow-indigo-500/10 overflow-hidden">
-            <div className="absolute inset-0 bg-gradient-to-br from-indigo-600/5 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-300" />
-            <div className="relative z-10">
-              <div className="text-xs font-bold text-indigo-400 uppercase tracking-widest mb-2">
-                Mode 2 · Mantle Exclusive
-              </div>
-              <h3 className="text-2xl font-black mb-3">Parallel Multi Tap</h3>
-              <p className="text-gray-400 leading-relaxed mb-6">
-                Powered by Mantle&apos;s low-cost L2. Open multiple predictions across different
-                markets simultaneously — all in one block, zero conflict.
-              </p>
-              <ul className="space-y-2">
-                {[
-                  'Predict multiple markets at once',
-                  'Batch tx execution on Mantle',
-                  'Maximize rewards every round',
-                ].map((step) => (
-                  <li key={step} className="flex items-center gap-2 text-sm text-gray-300">
-                    <span className="w-5 h-5 rounded-full bg-indigo-500/20 border border-indigo-500/30 flex items-center justify-center text-indigo-400 text-xs">
-                      ✓
-                    </span>
-                    {step}
-                  </li>
-                ))}
-              </ul>
-            </div>
-          </div>
-        </div>
-      </section>
-
-      {/* Features */}
-      <section id="features" className="relative z-10 max-w-6xl mx-auto px-6 py-24">
-        <div className="text-center mb-16">
-          <p className="text-purple-400 text-sm font-semibold uppercase tracking-widest mb-3">
-            Why Mantle Tap
-          </p>
-          <h2 className="text-4xl md:text-5xl font-black">Built Different</h2>
-        </div>
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
-          {features.map((f) => (
+        {/* Coin Cards */}
+        <div className="flex justify-center gap-6 md:gap-12 px-6">
+          {[
+            { name: 'BTC', logo: 'https://raw.githubusercontent.com/trustwallet/assets/master/blockchains/bitcoin/info/logo.png' },
+            { name: 'ETH', logo: 'https://raw.githubusercontent.com/trustwallet/assets/master/blockchains/ethereum/info/logo.png' },
+            { name: 'SOL', logo: 'https://raw.githubusercontent.com/trustwallet/assets/master/blockchains/solana/info/logo.png' },
+          ].map((coin) => (
             <div
-              key={f.title}
-              className="group bg-white/[0.03] border border-white/8 rounded-2xl p-6 hover:border-purple-500/30 hover:bg-purple-500/5 transition-all duration-300"
+              key={coin.name}
+              className="flex flex-col items-center gap-4 bg-white/5 hover:bg-white/10 border border-white/10 hover:border-[#00d395]/40 rounded-2xl py-8 px-10 md:px-16 transition-all duration-300 cursor-pointer"
             >
-              <h3 className="text-lg font-bold mb-2 text-white">{f.title}</h3>
-              <p className="text-gray-500 text-sm leading-relaxed">{f.description}</p>
+              <img
+                src={coin.logo}
+                alt={coin.name}
+                className="w-14 h-14 md:w-20 md:h-20 rounded-full"
+              />
+              <span className="text-white text-base md:text-lg font-semibold tracking-wide">{coin.name}</span>
             </div>
           ))}
         </div>
       </section>
 
-      {/* CTA */}
-      <section className="relative z-10 py-24 text-center px-6">
-        <div className="max-w-2xl mx-auto">
-          <div className="inline-block bg-gradient-to-r from-purple-600/20 to-violet-600/20 border border-purple-500/20 rounded-3xl p-12">
-            <h2 className="text-4xl md:text-5xl font-black mb-4">Ready to predict?</h2>
-            <p className="text-gray-400 mb-8 text-lg">
-              Connect your wallet and make your first prediction in under 10 seconds.
-            </p>
-            <Link
-              href="/trade"
-              id="cta-launch-btn"
-              className="inline-block bg-gradient-to-r from-purple-600 to-violet-600 hover:from-purple-500 hover:to-violet-500 text-white font-black px-12 py-4 rounded-2xl text-xl transition-all duration-200 shadow-xl shadow-purple-500/30 hover:shadow-purple-500/50 hover:scale-105"
-            >
-              Launch Mantle Tap →
-            </Link>
+      {/* Bento Grid Section */}
+      <section className="relative py-20 px-6 sm:px-12 bg-black">
+        <div className="container mx-auto max-w-7xl">
+          {/* Mobile: single column cards */}
+          <div className="flex flex-col gap-4 md:hidden">
+            <div className="rounded-2xl border border-white/10 bg-[#111111] p-6 flex flex-col overflow-hidden relative min-h-[180px]">
+              <h3 className="text-xl font-bold text-white">Account Abstraction</h3>
+              <p className="text-gray-400 text-sm leading-relaxed font-medium pr-20">
+                Trade seamlessly with Privy-powered smart wallets — no seed phrases, no hassle.
+              </p>
+              <Image src="/homepage/privy.png" alt="Privy" width={200} height={200} className="absolute w-[25%] object-contain" style={{ bottom: '10px', right: '15px' }} />
+            </div>
+            <div className="rounded-2xl border border-white/10 bg-gradient-to-r from-[#1a1a1a] to-[#111111] p-6 flex flex-col overflow-hidden min-h-[300px]">
+              <h3 className="text-2xl font-bold text-white mb-2">Relayer Wallet</h3>
+              <p className="text-gray-400 text-sm leading-relaxed font-medium">
+                Zero gas fees for every trade. Our relayer wallet covers all transaction costs so you can focus on trading, not fees.
+              </p>
+              <div className="flex-1 flex items-center justify-center mt-4">
+                <Image
+                  src="/homepage/ethra copy.png"
+                  alt="Relayer Wallet"
+                  width={400}
+                  height={400}
+                  className="w-[60%] object-contain"
+                />
+              </div>
+            </div>
+            <div className="rounded-2xl border border-white/10 bg-gradient-to-r from-[#111111] to-[#1a1a1a] p-6 flex flex-col overflow-hidden relative min-h-[180px]">
+              <h3 className="text-xl font-bold text-white">Pyth Oracle</h3>
+              <p className="text-gray-400 text-sm leading-relaxed font-medium pr-20">
+                Integrated with Pyth Network for real-time, high-fidelity price feeds.
+              </p>
+              <Image src="/homepage/pythivon.png" alt="Pyth Oracle" width={200} height={200} className="absolute w-[25%] object-contain" style={{ bottom: '10px', right: '20px' }} />
+            </div>
+            <div className="rounded-2xl border border-white/10 bg-[#111111] p-6 flex flex-col overflow-hidden relative min-h-[180px]">
+              <h3 className="text-xl font-bold text-white">Build on Mantle</h3>
+              <p className="text-gray-400 text-sm leading-relaxed font-medium pr-20">
+                Powered by Mantle Network for fast, low-cost, and secure transactions.
+              </p>
+              <Image src="/homepage/mantle.png" alt="Mantle Network" width={200} height={200} className="absolute w-[25%] object-contain" style={{ bottom: '10px', right: '20px' }} />
+            </div>
+            <div className="rounded-2xl border border-white/10 bg-[#111111] p-6 flex flex-col overflow-hidden min-h-[280px]">
+              <h3 className="text-2xl font-bold text-white mb-2">Seamless Trading</h3>
+              <p className="text-gray-400 text-sm leading-relaxed font-medium">
+                Enjoy a frictionless trading experience and sidestep blockchain congestion with One-Click Trading. Tap to place trades and manage your portfolio — all without waiting for confirmations or dealing with failed transactions.
+              </p>
+              <div className="flex-1 flex items-center justify-center mt-4">
+                <Image src="/homepage/seamlesstrade.png" alt="Seamless Trading" width={300} height={200} className="w-[50%] object-contain" />
+              </div>
+            </div>
+            <div className="rounded-2xl border border-white/10 bg-[#111111] p-6 flex flex-col overflow-hidden relative min-h-[180px]">
+              <h3 className="text-xl font-bold text-white">Multi-Tap Drag</h3>
+              <p className="text-gray-400 text-sm leading-relaxed font-medium pr-24">
+                Drag across the chart to open dozens of positions at once — all bundled into a single transaction.
+              </p>
+              <Image
+                src="/homepage/multi-drag.png"
+                alt="Multi-Tap Drag"
+                width={200}
+                height={200}
+                className="absolute w-[25%] object-contain"
+                style={{ bottom: '10px', right: '20px' }}
+              />
+            </div>
+          </div>
+
+          {/* Desktop: bento grid */}
+          <div className="hidden md:grid grid-cols-12 auto-rows-[200px] gap-4">
+            {/* Box 1: row 1, cols 1-4 - Account Abstraction */}
+            <div className="col-span-4 row-start-1 rounded-2xl border border-white/10 bg-[#111111] p-6 flex flex-col overflow-hidden relative">
+              <h3 className="text-xl font-bold text-white">Account Abstraction</h3>
+              <p className="text-gray-400 text-sm leading-relaxed font-medium pr-16">
+                Trade seamlessly with Privy-powered smart wallets — no seed phrases, no hassle.
+              </p>
+              <Image
+                src="/homepage/privy.png"
+                alt="Privy"
+                width={200}
+                height={200}
+                className="absolute w-[27%] object-contain"
+                style={{ bottom: '0px', right: '10px' }}
+              />
+            </div>
+            {/* Box 2: rows 1-2, cols 5-8 (tall middle) - Relayer Wallet */}
+            <div className="col-span-4 row-span-2 col-start-5 row-start-1 rounded-2xl border border-white/10 bg-gradient-to-r from-[#1a1a1a] to-[#111111] p-6 border-r-0 flex flex-col overflow-hidden">
+              <h3 className="text-2xl font-bold text-white mb-2">Relayer Wallet</h3>
+              <p className="text-gray-400 text-sm leading-relaxed font-medium">
+                Zero gas fees for every trade. Our relayer wallet covers all transaction costs so you can focus on trading, not fees.
+              </p>
+              <div className="flex-1 relative">
+                <Image
+                  src="/homepage/ethra copy.png"
+                  alt="Relayer Wallet"
+                  width={800}
+                  height={800}
+                  className="absolute w-[60%] max-w-none object-contain"
+                  style={{ bottom: '-40px', left: '-10%' }}
+                />
+              </div>
+            </div>
+            {/* Box 3: row 1, cols 9-12 - Pyth Oracle */}
+            <div className="col-span-4 col-start-9 row-start-1 rounded-2xl border border-white/10 bg-gradient-to-r from-[#111111] to-[#1a1a1a] p-6 flex flex-col overflow-hidden relative border-l-0">
+              <h3 className="text-xl font-bold text-white">Pyth Oracle</h3>
+              <p className="text-gray-400 text-sm leading-relaxed font-medium pr-16">
+                Integrated with Pyth Network for real-time, high-fidelity price feeds.
+              </p>
+              <Image
+                src="/homepage/pythivon.png"
+                alt="Pyth Oracle"
+                width={200}
+                height={200}
+                className="absolute w-[27%] object-contain"
+                style={{ bottom: '-30px', right: '40px' }}
+              />
+            </div>
+            {/* Box 4: row 2, cols 1-4 - Build on Mantle */}
+            <div className="col-span-4 col-start-1 row-start-2 rounded-2xl border border-white/10 bg-[#111111] p-6 flex flex-col overflow-hidden relative">
+              <h3 className="text-xl font-bold text-white">Build on Mantle</h3>
+              <p className="text-gray-400 text-sm leading-relaxed font-medium pr-16">
+                Powered by Mantle Network for fast, low-cost, and secure transactions.
+              </p>
+              <Image
+                src="/homepage/mantle.png"
+                alt="Mantle Network"
+                width={200}
+                height={200}
+                className="absolute w-[27%] object-contain"
+                style={{ bottom: '10px', right: '20px' }}
+              />
+            </div>
+            {/* Box 5: row 2, cols 9-12 - Privy Account Abstraction mini */}
+            <div className="col-span-4 col-start-9 row-start-2 rounded-2xl border border-white/10 bg-[#111111] p-6 flex flex-col overflow-hidden relative border-l-0">
+              <h3 className="text-xl font-bold text-white">Zero Gas Fees</h3>
+              <p className="text-gray-400 text-sm leading-relaxed font-medium pr-16">
+                Our relayer covers all on-chain costs — trade without ever worrying about gas.
+              </p>
+            </div>
+            {/* Box 6: row 3, cols 1-8 - Seamless Trading */}
+            <div className="col-span-8 col-start-1 row-start-3 rounded-2xl border border-white/10 bg-[#111111] p-8 flex items-center justify-between overflow-hidden">
+              <div className="flex-1 min-w-0 pr-8">
+                <h3 className="text-2xl font-bold text-white mb-2">Seamless Trading</h3>
+                <p className="text-gray-400 text-sm leading-relaxed font-medium">
+                  Enjoy a frictionless trading experience and sidestep blockchain congestion with One-Click Trading. Tap to place trades and manage your portfolio — all without waiting for confirmations or dealing with failed transactions.
+                </p>
+              </div>
+              <div className="flex-shrink-0">
+                <Image
+                  src="/homepage/seamlesstrade.png"
+                  alt="Seamless Trading"
+                  width={300}
+                  height={200}
+                  className="h-[150px] w-auto object-contain"
+                />
+              </div>
+            </div>
+            {/* Box 7: row 3, cols 9-12 - Multi-Tap Trading */}
+            <div className="col-span-4 col-start-9 row-start-3 rounded-2xl border border-white/10 bg-[#111111] p-6 flex flex-col overflow-hidden relative">
+              <h3 className="text-xl font-bold text-white">Multi-Tap Drag</h3>
+              <p className="text-gray-400 text-sm leading-relaxed font-medium pr-24">
+                Drag across the chart to open dozens of positions at once — all bundled into a single transaction.
+              </p>
+              <Image
+                src="/homepage/multi-drag.png"
+                alt="Multi-Tap Drag"
+                width={200}
+                height={200}
+                className="absolute w-[30%] object-contain"
+                style={{ bottom: '10px', right: '20px' }}
+              />
+            </div>
           </div>
         </div>
       </section>
 
       {/* Footer */}
-      <footer className="relative z-10 border-t border-white/5 py-8 px-6">
-        <div className="max-w-6xl mx-auto flex flex-col md:flex-row items-center justify-between gap-4">
-          <div className="flex items-center gap-2">
-            <div className="w-6 h-6 rounded-md bg-gradient-to-br from-purple-500 to-violet-600 flex items-center justify-center text-xs font-black">
-              M
+      <footer className="border-t border-gray-800 py-8 px-4 mt-20">
+        <div className="container mx-auto max-w-6xl">
+          <div className="flex flex-col md:flex-row justify-between items-center gap-4">
+            <div className="flex items-center gap-3">
+              <Image
+                src="/mantle-tap-polos.png"
+                alt="MantleTap Finance Logo"
+                width={24}
+                height={24}
+                className="w-6 h-6"
+              />
+              <span className="text-gray-400">© 2026 MantleTap. All rights reserved.</span>
             </div>
-            <span className="font-black">
-              Mantle<span className="text-purple-400">Tap</span>
-            </span>
+            <div className="flex gap-6 text-gray-400">
+               <span className="hover:text-white transition-colors">X</span>
+              <span className="hover:text-white transition-colors">Discord</span>
+              <Link
+                href="https://github.com/imferdinandd/mantle-tap"
+                target="_blank"
+                className="hover:text-white transition-colors"
+              >
+                GitHub
+              </Link>
+              <span className="hover:text-white transition-colors">Docs</span>
+            </div>
           </div>
-          <span className="text-gray-600 text-sm">© 2025 MantleTap. Built on Mantle.</span>
         </div>
       </footer>
 
+      {/* Custom Animations */}
       <style jsx global>{`
-        @keyframes marquee {
+        /* Smooth scroll */
+        html {
+          scroll-behavior: smooth;
+        }
+
+        /* Hide scrollbar */
+        body::-webkit-scrollbar {
+          display: none;
+        }
+        body {
+          -ms-overflow-style: none;
+          scrollbar-width: none;
+        }
+
+        @keyframes gradientShift {
+          0%,
+          100% {
+            opacity: 0.3;
+            transform: scale(1) rotate(0deg);
+          }
+          50% {
+            opacity: 0.6;
+            transform: scale(1.1) rotate(5deg);
+          }
+        }
+
+        @keyframes gridMove {
+          0% {
+            transform: translate(0, 0);
+          }
+          100% {
+            transform: translate(50px, 50px);
+          }
+        }
+
+        @keyframes float {
+          0%,
+          100% {
+            transform: translate(0, 0) scale(1);
+          }
+          33% {
+            transform: translate(30px, -30px) scale(1.1);
+          }
+          66% {
+            transform: translate(-20px, 20px) scale(0.9);
+          }
+        }
+
+        @keyframes floatSlow {
+          0%,
+          100% {
+            transform: translate(0, 0) rotate(0deg);
+          }
+          25% {
+            transform: translate(20px, -40px) rotate(90deg);
+          }
+          50% {
+            transform: translate(-30px, -20px) rotate(180deg);
+          }
+          75% {
+            transform: translate(-10px, 30px) rotate(270deg);
+          }
+        }
+
+        @keyframes rotate {
+          from {
+            transform: rotate(0deg);
+          }
+          to {
+            transform: rotate(360deg);
+          }
+        }
+
+        @keyframes marqueeScroll {
           0% {
             transform: translateX(0);
           }
           100% {
-            transform: translateX(-33.33%);
+            transform: translateX(-50%);
           }
         }
-        .animate-marquee {
-          animation: marquee 30s linear infinite;
+
+        @keyframes shimmer {
+          0% {
+            background-position: -1000px 0;
+          }
+          100% {
+            background-position: 1000px 0;
+          }
         }
-        @keyframes float-slow {
+
+        /* Enhance existing animations */
+        .animate-pulse {
+          animation: pulse 2s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+        }
+
+        @keyframes pulse {
           0%,
           100% {
-            transform: translateY(0px);
+            opacity: 1;
           }
           50% {
-            transform: translateY(-12px);
+            opacity: 0.5;
           }
         }
-        @keyframes float-mid {
+
+        /* Scroll-based animations */
+        @keyframes fadeInUp {
+          from {
+            opacity: 0;
+            transform: translateY(30px);
+          }
+          to {
+            opacity: 1;
+            transform: translateY(0);
+          }
+        }
+
+        .fade-in-up {
+          animation: fadeInUp 0.6s ease-out forwards;
+        }
+
+        /* Glow effect */
+        @keyframes glow {
           0%,
           100% {
-            transform: translateY(0px);
+            box-shadow: 0 0 20px rgba(6, 182, 212, 0.3);
           }
           50% {
-            transform: translateY(-8px);
+            box-shadow: 0 0 40px rgba(6, 182, 212, 0.6), 0 0 60px rgba(16, 185, 129, 0.4);
           }
         }
-        @keyframes float-fast {
-          0%,
-          100% {
-            transform: translateX(-50%) translateY(0px);
+
+        @keyframes fadeIn {
+          from {
+            opacity: 0;
+            transform: scale(0.8);
           }
-          50% {
-            transform: translateX(-50%) translateY(-10px);
+          to {
+            opacity: 1;
+            transform: scale(1);
           }
-        }
-        .animate-float-slow {
-          animation: float-slow 4s ease-in-out infinite;
-        }
-        .animate-float-mid {
-          animation: float-mid 3.5s ease-in-out infinite 0.5s;
-        }
-        .animate-float-fast {
-          animation: float-fast 3s ease-in-out infinite 1s;
         }
       `}</style>
     </div>
