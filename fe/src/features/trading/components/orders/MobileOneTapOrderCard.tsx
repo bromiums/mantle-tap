@@ -57,7 +57,7 @@ const MobileOneTapOrderCard = ({ order }: MobileOneTapOrderCardProps) => {
           </div>
         </div>
         <div className="text-right">
-          <div className="text-lg font-bold text-blue-300">
+          <div className="text-lg font-bold text-[#00d395]">
             {(displayMultiplier / 100).toFixed(2)}x
           </div>
           <div className="text-xs text-yellow-500 font-medium">Active</div>

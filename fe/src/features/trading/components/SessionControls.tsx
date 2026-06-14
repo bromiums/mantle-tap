@@ -147,7 +147,7 @@ function WhaleRow({ whale, isNew }: { whale: WhaleBet; isNew: boolean }) {
   return (
     <div
       className={`flex items-center justify-between px-3 py-2 border-b border-zinc-800/40 transition-all duration-700 ${
-        isNew ? 'bg-violet-900/20' : 'hover:bg-zinc-800/20'
+        isNew ? 'bg-emerald-900/20' : 'hover:bg-zinc-800/20'
       }`}
     >
       <div className="flex flex-col gap-0.5">
@@ -233,7 +233,7 @@ export default function SessionControls() {
               onClick={() => setCollateralPerTap(amt)}
               className={`px-2 py-1 rounded text-xs font-medium transition-colors ${
                 collateralPerTap === amt
-                  ? 'bg-violet-600 text-white'
+                  ? 'bg-emerald-600 text-white'
                   : 'bg-zinc-800 text-slate-400 hover:text-white'
               }`}
             >
@@ -248,7 +248,7 @@ export default function SessionControls() {
               if (!isNaN(v) && v > 0) setCollateralPerTap(v);
             }}
             placeholder="Custom"
-            className="w-14 px-2 py-1 rounded text-xs bg-zinc-800 text-white border border-zinc-700 focus:outline-none focus:border-violet-500"
+            className="w-14 px-2 py-1 rounded text-xs bg-zinc-800 text-white border border-zinc-700 focus:outline-none focus:border-[#00d395]"
             min="1"
           />
         </div>
@@ -266,7 +266,7 @@ export default function SessionControls() {
           className={`w-full py-2 rounded font-semibold text-sm transition-all disabled:opacity-60 disabled:cursor-not-allowed ${
             isActive
               ? 'bg-red-600 hover:bg-red-700 text-white'
-              : 'bg-violet-600 hover:bg-violet-700 text-white'
+              : 'bg-emerald-600 hover:bg-emerald-700 text-white'
           }`}
         >
           {isCreatingSession
@@ -289,7 +289,7 @@ export default function SessionControls() {
           <button
             onClick={() => setMultiTapEnabled(!multiTapEnabled)}
             className={`relative inline-flex h-5 w-9 items-center rounded-full transition-colors ${
-              multiTapEnabled ? 'bg-violet-600' : 'bg-zinc-700'
+              multiTapEnabled ? 'bg-emerald-600' : 'bg-zinc-700'
             }`}
           >
             <span
@@ -309,7 +309,7 @@ export default function SessionControls() {
           <span className="text-xs font-semibold text-slate-300 uppercase tracking-wider">
             My Positions
             {myActiveBets.length > 0 && (
-              <span className="ml-1.5 bg-violet-600 text-white rounded-full px-1.5 py-0.5 text-[10px]">
+              <span className="ml-1.5 bg-emerald-600 text-white rounded-full px-1.5 py-0.5 text-[10px]">
                 {myActiveBets.length}
               </span>
             )}

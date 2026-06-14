@@ -161,7 +161,7 @@ export const useChartInteraction = ({
             multiTapVisitedRef.current.add(cell);
             setHasMoved(true);
 
-            // Highlight cell immediately (purple selected color)
+            // Highlight cell immediately (Mantle green selected color)
             setSelectedCells((prev) => new Set(prev).add(cell));
 
             const [timestampStr, priceLevelStr] = cell.split('_');

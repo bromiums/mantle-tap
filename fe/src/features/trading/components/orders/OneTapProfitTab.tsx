@@ -110,7 +110,7 @@ export default function OneTapProfitTab() {
 
                   {/* Multiplier */}
                   <TableCell className="text-right">
-                    <span className="text-blue-300 font-bold">
+                    <span className="text-[#00d395] font-bold">
                       {(displayMultiplier / 100).toFixed(2)}x
                     </span>
                   </TableCell>

@@ -187,7 +187,7 @@ export default function TradingGrid({ currentPrice, activeBets = [] }: TradingGr
           onClick={() => setMultiTap((v) => !v)}
           className={`flex items-center gap-1.5 px-2 py-0.5 rounded text-[10px] font-medium transition-colors ${
             multiTap
-              ? 'bg-violet-600 text-white'
+              ? 'bg-emerald-600 text-white'
               : 'bg-zinc-800 text-slate-400 hover:text-white'
           }`}
           title="Drag across cells to place multiple bets"

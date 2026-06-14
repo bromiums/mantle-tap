@@ -529,7 +529,7 @@ const PerSecondChart: React.FC<PerSecondChartProps> = ({
           const isLong = cellCenterPrice < currentPriceVal;
           cellColor = isLong ? '34, 197, 94' : '239, 68, 68'; // Green : Red
         } else if (activeBet) {
-          cellColor = '168, 85, 247'; // Purple
+          cellColor = '0, 211, 149'; // Mantle green
         }
 
         if (activeBet) {
@@ -539,15 +539,15 @@ const PerSecondChart: React.FC<PerSecondChartProps> = ({
           ctx.lineWidth = 2;
           ctx.strokeRect(xLeft, yTop, boxWidth, boxHeight);
         } else if (isSelected) {
-          ctx.fillStyle = `rgba(168, 85, 247, ${0.35 * cellAlpha})`;
+          ctx.fillStyle = `rgba(0, 211, 149, ${0.35 * cellAlpha})`;
           ctx.fillRect(xLeft, yTop, boxWidth, boxHeight);
-          ctx.strokeStyle = `rgba(192, 132, 252, ${cellAlpha})`;
+          ctx.strokeStyle = `rgba(0, 255, 180, ${cellAlpha})`;
           ctx.lineWidth = 2;
           ctx.strokeRect(xLeft, yTop, boxWidth, boxHeight);
         } else if (isHovered && !isDragging) {
-          ctx.fillStyle = `rgba(168, 85, 247, ${0.25 * cellAlpha})`;
+          ctx.fillStyle = `rgba(0, 211, 149, ${0.25 * cellAlpha})`;
           ctx.fillRect(xLeft, yTop, boxWidth, boxHeight);
-          ctx.strokeStyle = `rgba(168, 85, 247, ${0.8 * cellAlpha})`;
+          ctx.strokeStyle = `rgba(0, 211, 149, ${0.8 * cellAlpha})`;
           ctx.lineWidth = 1.5;
           ctx.strokeRect(xLeft, yTop, boxWidth, boxHeight);
         }
@@ -693,15 +693,15 @@ const PerSecondChart: React.FC<PerSecondChartProps> = ({
       ctx.lineTo(lastX, chartHeight);
       ctx.closePath();
       const gradient = ctx.createLinearGradient(0, 0, 0, chartHeight);
-      gradient.addColorStop(0, 'rgba(168, 85, 247, 0.25)');
+      gradient.addColorStop(0, 'rgba(0, 211, 149, 0.25)');
       gradient.addColorStop(1, 'rgba(0, 0, 0, 0.05)');
       ctx.fillStyle = gradient;
       ctx.fill();
 
       // Line
-      ctx.strokeStyle = '#a855f7';
+      ctx.strokeStyle = '#00d395';
       ctx.lineWidth = 3;
-      ctx.shadowColor = '#a855f7';
+      ctx.shadowColor = '#00d395';
       ctx.shadowBlur = 10;
       ctx.beginPath();
       firstPoint = true;
@@ -730,22 +730,22 @@ const PerSecondChart: React.FC<PerSecondChartProps> = ({
 
       if (blinkState) {
         if (isFocusMode) {
-          ctx.strokeStyle = 'rgba(168, 85, 247, 0.4)';
+          ctx.strokeStyle = 'rgba(0, 211, 149, 0.4)';
           ctx.lineWidth = 2;
           ctx.beginPath();
           ctx.arc(latestX, currentPriceY, 12, 0, Math.PI * 2);
           ctx.stroke();
         }
-        ctx.fillStyle = 'rgba(168, 85, 247, 0.3)';
+        ctx.fillStyle = 'rgba(0, 211, 149, 0.3)';
         ctx.beginPath();
         ctx.arc(latestX, currentPriceY, 8, 0, Math.PI * 2);
         ctx.fill();
-        ctx.fillStyle = 'rgba(168, 85, 247, 0.6)';
+        ctx.fillStyle = 'rgba(0, 211, 149, 0.6)';
         ctx.beginPath();
         ctx.arc(latestX, currentPriceY, 5, 0, Math.PI * 2);
         ctx.fill();
-        ctx.fillStyle = '#a855f7';
-        ctx.shadowColor = '#a855f7';
+        ctx.fillStyle = '#00d395';
+        ctx.shadowColor = '#00d395';
         ctx.shadowBlur = 15;
         ctx.beginPath();
         ctx.arc(latestX, currentPriceY, 3, 0, Math.PI * 2);
@@ -855,11 +855,11 @@ const PerSecondChart: React.FC<PerSecondChartProps> = ({
       ctx.save();
 
       // Bright fill flash (strongest early, fades fast)
-      ctx.fillStyle = `rgba(168, 85, 247, ${alpha * 0.45})`;
+      ctx.fillStyle = `rgba(0, 211, 149, ${alpha * 0.45})`;
       ctx.fillRect(sx, sy, sw, sh);
 
-      // Inner glow (lighter purple)
-      ctx.fillStyle = `rgba(216, 180, 254, ${alpha * 0.25})`;
+      // Inner glow (lighter green)
+      ctx.fillStyle = `rgba(0, 255, 180, ${alpha * 0.25})`;
       ctx.fillRect(
         cx - (sw * 0.6) / 2,
         cy - (sh * 0.6) / 2,
@@ -868,7 +868,7 @@ const PerSecondChart: React.FC<PerSecondChartProps> = ({
       );
 
       // Expanding border
-      ctx.strokeStyle = `rgba(192, 132, 252, ${alpha * 0.9})`;
+      ctx.strokeStyle = `rgba(0, 211, 149, ${alpha * 0.9})`;
       ctx.lineWidth = 2;
       ctx.strokeRect(sx, sy, sw, sh);
 
@@ -876,7 +876,7 @@ const PerSecondChart: React.FC<PerSecondChartProps> = ({
       const scale2 = 1 + 0.5 * Math.sin(Math.PI * t) * Math.exp(-3 * t);
       const sw2 = anim.w * scale2;
       const sh2 = anim.h * scale2;
-      ctx.strokeStyle = `rgba(168, 85, 247, ${alpha * 0.4})`;
+      ctx.strokeStyle = `rgba(0, 211, 149, ${alpha * 0.4})`;
       ctx.lineWidth = 1;
       ctx.strokeRect(cx - sw2 / 2, cy - sh2 / 2, sw2, sh2);
 
