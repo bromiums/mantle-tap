@@ -24,14 +24,12 @@ export function Providers({ children }: { children: React.ReactNode }) {
       config={{
         appearance: {
           theme: 'dark',
-          accentColor: '#676FFF',
+          accentColor: '#00d395',
+          logo: '/mantle-tap-polos.png',
           showWalletLoginFirst: true,
           walletList: [
-            'base_account',
-            'detected_ethereum_wallets',
             'metamask',
-            'coinbase_wallet',
-            'wallet_connect',
+            'detected_ethereum_wallets',
           ],
         },
         loginMethods: ['email', 'google', 'wallet'],

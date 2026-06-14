@@ -34,7 +34,7 @@ export const WalletDialogContent: React.FC = () => {
         <div className="flex items-center gap-2">
           {/* Address Box */}
           <div className="flex items-center gap-2.5 px-3 py-2.5 bg-slate-800/50 rounded-xl flex-1">
-            <div className="w-7 h-7 rounded-full bg-gradient-to-br from-blue-500 to-purple-500 flex items-center justify-center flex-shrink-0">
+            <div className="w-7 h-7 rounded-full bg-gradient-to-br from-[#00d395] to-[#00a878] flex items-center justify-center flex-shrink-0">
               <Wallet className="w-3.5 h-3.5 text-white" />
             </div>
             <span className="text-slate-100 font-medium text-sm">{shortAddress}</span>
