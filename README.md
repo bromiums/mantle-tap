@@ -2,6 +2,8 @@
 
 **Mantle Tap** is a decentralized prediction market built on [Mantle](https://mantle.xyz) where users predict the next price direction of assets. Tap UP or DOWN, wait for settlement, and win USDC rewards
 
+![Mantle-Tap Banner](./fe/public/og-banner.png)
+
 > Built for **Mantle Hackathon 2026**
 
 ---
